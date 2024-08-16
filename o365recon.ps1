@@ -15,6 +15,7 @@
 #       - STRONGER: New features, Bug fixes, AD information in easy-to-parse textfiles.
 #
 # Run the script. It will prompt you to authenticate. Log in. Get the loot.
+#2024 : This fork introduces significant improvements to the PowerShell script responsible for retrieving and processing Office 365 user data. Previously, the script loaded all user data into memory, which could lead to excessive RAM usage, especially with large datasets. The revised version of the script addresses this issue by streaming user data directly to the output files without storing the entire dataset in memory.
 
 
 
@@ -172,28 +173,26 @@ echo "--------------------------------------------------------------------------
 # USER INFO
 
 echo "Retrieving User Information (this may take a while):" 
-Write-Host -NoNewline "`t`t`tRetrieving User List ..."
-#retrieve once, use multiple times
-$userlist = Get-MsolUser -All
+
+Write-Host -NoNewline "`t`t`tRetrieving and processing User List ..."
+# Stream user data directly without storing in memory
+Get-MsolUser -All | ForEach-Object {
+    # Trim and output each UserPrincipalName to the simple list
+    $_.UserPrincipalName.Trim(" ") | Out-File -Append -FilePath .\${CURRENTJOB}.O365.Users.txt 
+
+    # Filter and export detailed list if not a HealthMailbox
+    if ($_.UserPrincipalName -notlike "HealthMailbox*") {
+        $_ | Select-Object -Property UserPrincipalName, DisplayName, Department, Title, PhoneNumber, Office, PasswordNeverExpires, LastPasswordChangeTimestamp, LastDirSyncTime | Export-Csv -Append -Path .\${CURRENTJOB}.O365.Users_Detailed.csv
+    }
+
+    # Output user SignInName and ProxyAddresses
+    "$($_.SignInName),$($_.ProxyAddresses)" | Out-File -Append -FilePath .\${CURRENTJOB}.O365.Users_ProxyAddresses.txt
+
+    # Output all properties in LDAP style format
+    $_ | Select-Object -Property * | Out-File -Append -FilePath .\${CURRENTJOB}.O365.Users_LDAP_details.txt
+}
 echo "`t`t`tDONE"
 
-Write-Host -NoNewline "`t`t`tCreating simple O365 user list ... "
-# if we just are lazy and use ft, then our output file will have whitespace at the end :-/
-foreach($line in $userlist){$line.UserPrincipalName.Trim(" ") | Out-File -Append -FilePath .\${CURRENTJOB}.O365.Users.txt }
-echo "`t`tDONE"
-
-Write-Host -NoNewline "`t`t`tCreating Detailed O365 User List CSV ... "
-$userlist |  Where-Object {$_.UserPrincipalName -notlike "HealthMailbox*"} | Select-Object -Property UserPrincipalName,DisplayName,Department,Title,PhoneNumber,Office,PasswordNeverExpires,LastPasswordChangeTimestamp,LastDirSyncTime | Export-Csv -Append -Path .\${CURRENTJOB}.O365.Users_Detailed.csv
-echo "`tDONE"
-
-Write-Host -NoNewline "`t`t`tCreating user->ProxyAddresses list ... "
-$proxylist=foreach($user in $userlist){echo "$($user.SignInName),$($user.ProxyAddresses)"} 
-$proxylist | Sort-Object | Out-File -Append -FilePath .\${CURRENTJOB}.O365.Users_ProxyAddresses.txt
-echo "`t`tDONE"
-
-Write-Host -NoNewline "`t`t`tGrabbing O365 LDAP style user data ... "
-$userlist | Select-Object -Property * | Out-File -Append -FilePath .\${CURRENTJOB}.O365.Users_LDAP_details.txt
-echo "`t`tDONE"
 
 
 if ($connectedToAzureAD){
