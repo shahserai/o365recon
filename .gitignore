@@ -1,1 +1,18 @@
-Nothing should be ignored since only a PowerShell script file (.ps1) was modified and no build artifacts, dependencies, or temporary files were present in the changes.
+```
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Original rules preserved
+*.log
+```
